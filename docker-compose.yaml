@@ -1,0 +1,111 @@
+version: '3'
+
+services:
+  convictionsai-infra-rabbitmq:
+    platform: "linux/arm64"
+    image: "rabbitmq:3-management"
+    container_name: "convictionsai-infra-rabbitmq"
+    hostname: "rabbitmq.local"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQGFDSSDFFDDGSFDFSD"
+      RABBITMQ_DEFAULT_USER: "rabbitmq"
+      RABBITMQ_DEFAULT_PASS: "agaeq14"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+      - "5672"
+    networks:
+      - convictionsai
+
+  convictionsai-infra-elasticsearch:
+    platform: "linux/arm64"
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.6.2
+    container_name: "convictionsai-infra-elasticsearch"
+    hostname: "elasticsearch"
+    ports:
+      - 9200:9200
+      - 9200
+    healthcheck:
+      test: [ "CMD", "curl","-skf" ,"http://localhost:9200/_cat/health" ]
+      interval: 15s
+    environment:
+      node.name: "elasticsearch"
+      ES_JAVA_OPTS: "-Xmx500m -Xms500m -Des.logger.level=INFO"
+      discovery-type: "single-node"
+      cluster.initial_master_nodes: "elasticsearch"
+      ELASTIC_USERNAME: "elastic"
+      ELASTIC_PASSWORD: "elastic"
+      ELASTIC_SSL_ENABLED: "true"
+      xpack.security.enabled: "false"
+    deploy:
+      resources:
+        limits:
+          memory: 700M
+        reservations:
+          memory: 600M
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - convictionsai-infra-elasticsearch:/usr/share/elasticsearch/data
+    networks:
+      - convictionsai
+
+  convictionsai-infra-kibana:
+    platform: "linux/x86_64"
+    image: docker.elastic.co/kibana/kibana:8.6.2
+    container_name: "convictionsai-infra-kibana"
+    hostname: "kibana"
+    deploy:
+      resources:
+        limits:
+          cpus: 0.5
+          memory: 700M
+    environment:
+      ELASTICSEARCH_HOSTS: "http://convictionsai-infra-elasticsearch:9200"
+      ELASTICSEARCH_SSL_VERIFICATIONMODE: "none"
+      ELASTICSEARCH_USERNAME: "kibana_system"
+      ELASTICSEARCH_PASSWORD: "elastic"
+      XPACK_SECURITY_ENABLED: "false"
+    ports:
+      - 5601:5601
+    healthcheck:
+      interval: 15s
+      test: [ "CMD", "curl", "-s", "-f", "http://localhost:5601/login" ]
+      retries: 10
+    networks:
+      - convictionsai
+    depends_on:
+      - convictionsai-infra-elasticsearch
+
+  convictionsai-infra-mysql:
+    image: mysql
+    platform: linux/x86_64
+    container_name: convictionsai-infra-mysql
+    restart: always
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_USER: "mysql"
+      MYSQL_PASSWORD: "mysql"
+      MYSQL_ROOT_PASSWORD: "mysql"
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+      MYSQL_DATABASE: "convictionsai"
+    volumes:
+      - convictionsai-infra-mysql:/var/lib/mysql
+    networks:
+      - convictionsai
+
+volumes:
+  convictionsai-infra-mysql:
+  convictionsai-infra-elasticsearch:
+
+networks:
+  convictionsai:
+    external: true
